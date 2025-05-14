@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2.5D Block Editor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .cell { @apply border border-gray-300 w-6 h-6 cursor-pointer; }
+    .filled { @apply bg-blue-500; }
+  </style>
+</head>
+<body class="bg-gray-900 text-white p-4">
+  <div class="mb-4 flex flex-wrap items-center gap-4">
+    <label>Layer (Y): <input id="layerInput" type="number" min="0" max="99" value="0" class="text-black w-20 p-1"></label>
+    <label>Model: <input id="modelInput" type="text" value="Wall$0$0" class="text-black w-32 p-1"></label>
+    <button onclick="exportLua()" class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded">Export to Lua</button>
+  </div>
+
+  <div id="grid" class="grid grid-cols-20 gap-0.5 w-max"></div>
+
+  <script>
+    const sizeX = 20, sizeZ = 20, sizeY = 100;
+    const grid = Array.from({ length: sizeY }, () =>
+      Array.from({ length: sizeX }, () => Array(sizeZ).fill(null))
+    );
+
+    let currentY = 0;
+    const gridEl = document.getElementById("grid");
+    const layerInput = document.getElementById("layerInput");
+    const modelInput = document.getElementById("modelInput");
+
+    function renderLayer(y) {
+      gridEl.innerHTML = "";
+      for (let z = 0; z < sizeZ; z++) {
+        for (let x = 0; x < sizeX; x++) {
+          const div = document.createElement("div");
+          div.className = "cell";
+          if (grid[y][x][z]) div.classList.add("filled");
+          div.onclick = () => {
+            const val = grid[y][x][z];
+            grid[y][x][z] = val ? null : modelInput.value;
+            renderLayer(currentY);
+          };
+          gridEl.appendChild(div);
+        }
+      }
+    }
+
+    function exportLua() {
+      let lua = "";
+      for (let y = 0; y < sizeY; y++) {
+        for (let x = 0; x < sizeX; x++) {
+          for (let z = 0; z < sizeZ; z++) {
+            const model = grid[y][x][z];
+            if (model) {
+              lua += `Build("${model}", ${x}, ${y}, ${z})\n`;
+            }
+          }
+        }
+      }
+      navigator.clipboard.writeText(lua).then(() => alert("Lua exported to clipboard!"));
+    }
+
+    layerInput.onchange = () => {
+      const val = parseInt(layerInput.value);
+      if (val >= 0 && val < sizeY) {
+        currentY = val;
+        renderLayer(currentY);
+      }
+    };
+
+    renderLayer(currentY);
+  </script>
+</body>
+</html>
