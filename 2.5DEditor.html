@@ -1,100 +1,110 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>2.5D Grid Editor</title>
   <style>
     body {
-      font-family: sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
       margin: 0;
-      padding: 0;
-    }
-    #controls {
-      margin: 1rem;
-    }
-    #grid {
-      display: grid;
-      grid-template-columns: repeat(20, 30px);
-      grid-template-rows: repeat(20, 30px);
-      gap: 1px;
-      background-color: #333;
-    }
-    .cell {
-      width: 30px;
-      height: 30px;
-      background-color: #eee;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: 10px;
-      cursor: pointer;
-    }
-    .filled {
-      background-color: #4caf50;
+      overflow: hidden;
+      background: #111;
       color: white;
+      font-family: sans-serif;
+    }
+    canvas {
+      display: block;
+      background: #222;
+    }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 2;
+    }
+    button, input {
+      margin: 5px;
     }
   </style>
 </head>
 <body>
-  <div id="controls">
-    <label>Model: <input type="text" id="modelInput" value="Wall$0$0" /></label>
-    <label>Y Layer: <input type="number" id="yInput" min="0" max="99" value="0" /></label>
-    <button onclick="exportLua()">Export Lua</button>
+  <div id="ui">
+    Layer: <input id="layer" type="number" min="0" max="99" value="0">
+    <button onclick="exportLua()">Export</button>
   </div>
-  <div id="grid"></div>
+  <canvas id="editor"></canvas>
 
   <script>
-    const grid = document.getElementById("grid");
-    const modelInput = document.getElementById("modelInput");
-    const yInput = document.getElementById("yInput");
-    const placed = {}; // key = "x,z,y" => model name
+    const canvas = document.getElementById("editor");
+    const ctx = canvas.getContext("2d");
+    const gridSize = 20;
+    const cellSize = 32;
+    const layers = Array.from({ length: 100 }, () => ({}));
+    let currentLayer = 0;
 
-    for (let y = 0; y < 20 * 20; y++) {
-      const cell = document.createElement("div");
-      const x = y % 20;
-      const z = Math.floor(y / 20);
-      cell.classList.add("cell");
-      cell.dataset.x = x;
-      cell.dataset.z = z;
-      cell.innerText = "";
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 
-      cell.addEventListener("click", () => {
-        const model = modelInput.value;
-        const layerY = parseInt(yInput.value);
-        const key = `${x},${layerY},${z}`;
+    document.getElementById("layer").oninput = (e) => {
+      currentLayer = parseInt(e.target.value);
+      draw();
+    };
 
-        if (placed[key]) {
-          delete placed[key];
-          cell.classList.remove("filled");
-          cell.innerText = "";
-        } else {
-          placed[key] = model;
-          cell.classList.add("filled");
-          cell.innerText = model.split("$")[0];
-        }
-      });
+    canvas.addEventListener("click", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left) / cellSize);
+      const z = Math.floor((e.clientY - rect.top) / cellSize);
+      const key = `${x},${z}`;
 
-      grid.appendChild(cell);
+      const layer = layers[currentLayer];
+      if (layer[key]) {
+        delete layer[key];
+      } else {
+        layer[key] = "Wall$0$0";
+      }
+      draw();
+    });
+
+    function drawGrid() {
+      ctx.strokeStyle = "#444";
+      for (let x = 0; x <= gridSize; x++) {
+        ctx.beginPath();
+        ctx.moveTo(x * cellSize, 0);
+        ctx.lineTo(x * cellSize, gridSize * cellSize);
+        ctx.stroke();
+      }
+      for (let z = 0; z <= gridSize; z++) {
+        ctx.beginPath();
+        ctx.moveTo(0, z * cellSize);
+        ctx.lineTo(gridSize * cellSize, z * cellSize);
+        ctx.stroke();
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawGrid();
+
+      const layer = layers[currentLayer];
+      for (const key in layer) {
+        const [x, z] = key.split(",").map(Number);
+        ctx.fillStyle = "#66ccff";
+        ctx.fillRect(x * cellSize + 1, z * cellSize + 1, cellSize - 2, cellSize - 2);
+      }
     }
 
     function exportLua() {
       let lua = "";
-      for (const key in placed) {
-        const [x, y, z] = key.split(",").map(Number);
-        const model = placed[key];
-        lua += `Build("${model}", ${x}, ${y}, ${z})\n`;
+      for (let y = 0; y < layers.length; y++) {
+        for (const key in layers[y]) {
+          const [x, z] = key.split(",").map(Number);
+          const model = layers[y][key];
+          lua += `Build("${model}", ${x}, ${y}, ${z})\n`;
+        }
       }
-      const blob = new Blob([lua], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "build.lua";
-      a.click();
+      console.log(lua);
+      alert("Lua script copied to console");
     }
+
+    draw();
   </script>
 </body>
 </html>
