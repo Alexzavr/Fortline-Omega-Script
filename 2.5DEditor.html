@@ -3,74 +3,98 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>2.5D Block Editor</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>2.5D Grid Editor</title>
   <style>
-    .cell { @apply border border-gray-300 w-6 h-6 cursor-pointer; }
-    .filled { @apply bg-blue-500; }
+    body {
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
+      padding: 0;
+    }
+    #controls {
+      margin: 1rem;
+    }
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(20, 30px);
+      grid-template-rows: repeat(20, 30px);
+      gap: 1px;
+      background-color: #333;
+    }
+    .cell {
+      width: 30px;
+      height: 30px;
+      background-color: #eee;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 10px;
+      cursor: pointer;
+    }
+    .filled {
+      background-color: #4caf50;
+      color: white;
+    }
   </style>
 </head>
-<body class="bg-gray-900 text-white p-4">
-  <div class="mb-4 flex flex-wrap items-center gap-4">
-    <label>Layer (Y): <input id="layerInput" type="number" min="0" max="99" value="0" class="text-black w-20 p-1"></label>
-    <label>Model: <input id="modelInput" type="text" value="Wall$0$0" class="text-black w-32 p-1"></label>
-    <button onclick="exportLua()" class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded">Export to Lua</button>
+<body>
+  <div id="controls">
+    <label>Model: <input type="text" id="modelInput" value="Wall$0$0" /></label>
+    <label>Y Layer: <input type="number" id="yInput" min="0" max="99" value="0" /></label>
+    <button onclick="exportLua()">Export Lua</button>
   </div>
-
-  <div id="grid" class="grid grid-cols-20 gap-0.5 w-max"></div>
+  <div id="grid"></div>
 
   <script>
-    const sizeX = 20, sizeZ = 20, sizeY = 100;
-    const grid = Array.from({ length: sizeY }, () =>
-      Array.from({ length: sizeX }, () => Array(sizeZ).fill(null))
-    );
-
-    let currentY = 0;
-    const gridEl = document.getElementById("grid");
-    const layerInput = document.getElementById("layerInput");
+    const grid = document.getElementById("grid");
     const modelInput = document.getElementById("modelInput");
+    const yInput = document.getElementById("yInput");
+    const placed = {}; // key = "x,z,y" => model name
 
-    function renderLayer(y) {
-      gridEl.innerHTML = "";
-      for (let z = 0; z < sizeZ; z++) {
-        for (let x = 0; x < sizeX; x++) {
-          const div = document.createElement("div");
-          div.className = "cell";
-          if (grid[y][x][z]) div.classList.add("filled");
-          div.onclick = () => {
-            const val = grid[y][x][z];
-            grid[y][x][z] = val ? null : modelInput.value;
-            renderLayer(currentY);
-          };
-          gridEl.appendChild(div);
+    for (let y = 0; y < 20 * 20; y++) {
+      const cell = document.createElement("div");
+      const x = y % 20;
+      const z = Math.floor(y / 20);
+      cell.classList.add("cell");
+      cell.dataset.x = x;
+      cell.dataset.z = z;
+      cell.innerText = "";
+
+      cell.addEventListener("click", () => {
+        const model = modelInput.value;
+        const layerY = parseInt(yInput.value);
+        const key = `${x},${layerY},${z}`;
+
+        if (placed[key]) {
+          delete placed[key];
+          cell.classList.remove("filled");
+          cell.innerText = "";
+        } else {
+          placed[key] = model;
+          cell.classList.add("filled");
+          cell.innerText = model.split("$")[0];
         }
-      }
+      });
+
+      grid.appendChild(cell);
     }
 
     function exportLua() {
       let lua = "";
-      for (let y = 0; y < sizeY; y++) {
-        for (let x = 0; x < sizeX; x++) {
-          for (let z = 0; z < sizeZ; z++) {
-            const model = grid[y][x][z];
-            if (model) {
-              lua += `Build("${model}", ${x}, ${y}, ${z})\n`;
-            }
-          }
-        }
+      for (const key in placed) {
+        const [x, y, z] = key.split(",").map(Number);
+        const model = placed[key];
+        lua += `Build("${model}", ${x}, ${y}, ${z})\n`;
       }
-      navigator.clipboard.writeText(lua).then(() => alert("Lua exported to clipboard!"));
+      const blob = new Blob([lua], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "build.lua";
+      a.click();
     }
-
-    layerInput.onchange = () => {
-      const val = parseInt(layerInput.value);
-      if (val >= 0 && val < sizeY) {
-        currentY = val;
-        renderLayer(currentY);
-      }
-    };
-
-    renderLayer(currentY);
   </script>
 </body>
 </html>
