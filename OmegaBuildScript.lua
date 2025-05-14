@@ -1,3 +1,14 @@
+-- is edited with VS Code
+--[[ Omega Build Script
+    Version: 1.0
+    Description: A script for building in a game using Rayfield UI.
+]]
+--[[
+    Building Models:
+    Wall, Floor, Door, Window, Ramp
+    All models can be rotated by $0$0
+    Example: Wall$90$0, Floor$270$0, Ramp$180$0
+]]
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 SlideXAxis = 0
 SlideYAxis = 0
