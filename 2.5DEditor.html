@@ -32,6 +32,8 @@
     const cellSize = 40;
     let cols = canvas.width / cellSize;
     let rows = canvas.height / cellSize;
+    let offsetX = cols / 2;
+    let offsetZ = rows / 2;
 
     let isMouseDown = false;
     let rightClick = false;
@@ -63,8 +65,8 @@
 
     function handleClick(e) {
       const rect = canvas.getBoundingClientRect();
-      const x = Math.floor((e.clientX - rect.left) / cellSize);
-      const z = Math.floor((e.clientY - rect.top) / cellSize);
+      const x = Math.floor((e.clientX - rect.left) / cellSize - offsetX);
+      const z = Math.floor((e.clientY - rect.top) / cellSize - offsetZ);
       const y = getLayer();
       const key = `${x},${y},${z}`;
       if (!grid[key]) grid[key] = new Set();
@@ -81,8 +83,8 @@
     }
 
     function drawModel(x, z, model, alpha = 1.0) {
-      const x1 = x * cellSize;
-      const y1 = z * cellSize;
+      const x1 = (x + offsetX) * cellSize;
+      const y1 = (z + offsetZ) * cellSize;
       const x2 = x1 + cellSize;
       const y2 = y1 + cellSize;
 
@@ -204,6 +206,8 @@
       canvas.height = height * cellSize;
       cols = width;
       rows = height;
+      offsetX = cols / 2;
+      offsetZ = rows / 2;
       drawGrid();
     }
 
