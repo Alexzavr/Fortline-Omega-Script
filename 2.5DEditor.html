@@ -24,7 +24,6 @@
       <option value="RampLeft$0$0">RampLeft</option>
       <option value="RampBack$0$0">RampBack</option>
     </select>
-    <button onclick="rotateModel()">Rotate (R)</button>
     <label><input type="checkbox" id="showLower" /> Показати шари знизу</label>
     <button onclick="exportLua()">Export Lua</button>
     <button onclick="clearCurrentLayer()">Clear Current Layer</button>
@@ -41,87 +40,88 @@
   <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
-    const cellSize = 40;
-    let cols = canvas.width / cellSize;
-    let rows = canvas.height / cellSize;
-    let offsetX = Math.floor(cols / 2);
-    let offsetZ = Math.floor(rows / 2);
+    let gridWidth = 20;
+    let gridHeight = 20;
+    let cellSize = Math.floor(canvas.width / gridWidth);
+    let offsetX = Math.floor(gridWidth / 2);
+    let offsetZ = Math.floor(gridHeight / 2);
+    const grid = Array.from({ length: 100 }, () => []);
+    let currentModel = 'Wall$0$0';
+    let showLower = false;
 
-    let isMouseDown = false;
-    let rightClick = false;
-    let grid = {}; // key = x,y,z ; value = Set of model strings
-
-    const getLayer = () => parseInt(document.getElementById('layer').value);
-    const showLowerCheckbox = document.getElementById('showLower');
-    const coordDisplay = document.getElementById('coordDisplay');
-    let currentRotation = 0;
-
-    const getModel = () => {
-      const modelType = document.getElementById('model').value.split('$')[0];
-      return `${modelType}$${currentRotation}$0`;
-    };
-
-    function rotateModel() {
-      currentRotation = (currentRotation + 90) % 360;
-      drawGrid();
+    function updateModelRotation(delta) {
+      const parts = currentModel.split('$');
+      let rot = parseInt(parts[1]);
+      rot = (rot + delta + 360) % 360;
+      currentModel = `${parts[0]}$${rot}$0`;
+      document.getElementById('model').value = currentModel;
     }
 
-    document.addEventListener('keydown', e => {
-      if (e.key.toLowerCase() === 'r') rotateModel();
+    document.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() === 'r') {
+        updateModelRotation(90);
+      }
     });
 
-    const getPosOffset = () => [
-      parseInt(document.getElementById('posX').value),
-      parseInt(document.getElementById('posY').value),
-      parseInt(document.getElementById('posZ').value),
-    ];
+    document.getElementById('model').addEventListener('change', (e) => currentModel = e.target.value);
+    document.getElementById('layer').addEventListener('change', draw);
+    document.getElementById('showLower').addEventListener('change', () => { showLower = !showLower; draw(); });
 
-    canvas.addEventListener('mousedown', e => {
-      isMouseDown = true;
-      rightClick = e.button === 2;
-      handleClick(e);
-    });
-
-    canvas.addEventListener('mouseup', () => isMouseDown = false);
-    canvas.addEventListener('mouseleave', () => isMouseDown = false);
     canvas.addEventListener('mousemove', e => {
       const rect = canvas.getBoundingClientRect();
       const x = Math.floor((e.clientX - rect.left) / cellSize - offsetX);
       const z = Math.floor((e.clientY - rect.top) / cellSize - offsetZ);
-      coordDisplay.innerText = `x: ${x}, y: ${getLayer()}, z: ${z}`;
-      if (isMouseDown) handleClick(e);
+      document.getElementById('coordDisplay').innerText = `(${x}, ${z})`;
     });
 
-    canvas.addEventListener('contextmenu', e => e.preventDefault());
-
-    canvas.addEventListener('wheel', e => {
-      e.preventDefault();
-      const delta = Math.sign(e.deltaY);
-      const shift = e.shiftKey ? 10 : 1;
-      const layerInput = document.getElementById('layer');
-      let newVal = parseInt(layerInput.value) + delta * shift;
-      newVal = Math.max(parseInt(layerInput.min), Math.min(parseInt(layerInput.max), newVal));
-      layerInput.value = newVal;
-      drawGrid();
-    });
-
-    function handleClick(e) {
+    canvas.addEventListener('click', e => {
       const rect = canvas.getBoundingClientRect();
       const x = Math.floor((e.clientX - rect.left) / cellSize - offsetX);
       const z = Math.floor((e.clientY - rect.top) / cellSize - offsetZ);
-      const y = getLayer();
-      const key = `${x},${y},${z}`;
-      if (!grid[key]) grid[key] = new Set();
-      const model = getModel();
+      const y = parseInt(document.getElementById('layer').value);
+      if (!grid[y]) grid[y] = [];
+      grid[y][`${x},${z}`] = currentModel;
+      draw();
+    });
 
-      if (rightClick) {
-        grid[key].delete(model);
-        if (grid[key].size === 0) delete grid[key];
-      } else {
-        grid[key].add(model);
+    function clearCurrentLayer() {
+      const y = parseInt(document.getElementById('layer').value);
+      grid[y] = [];
+      draw();
+    }
+
+    function resizeGrid() {
+      gridWidth = parseInt(document.getElementById('gridWidth').value);
+      gridHeight = parseInt(document.getElementById('gridHeight').value);
+      cellSize = Math.floor(canvas.width / gridWidth);
+      offsetX = Math.floor(gridWidth / 2);
+      offsetZ = Math.floor(gridHeight / 2);
+      draw();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let x = 0; x < gridWidth; x++) {
+        for (let z = 0; z < gridHeight; z++) {
+          ctx.strokeStyle = '#555';
+          ctx.strokeRect((x * cellSize), (z * cellSize), cellSize, cellSize);
+        }
       }
 
-      drawGrid();
+      ctx.fillStyle = 'red';
+      ctx.fillRect(offsetX * cellSize + cellSize / 4, offsetZ * cellSize + cellSize / 4, cellSize / 2, cellSize / 2);
+
+      const currentY = parseInt(document.getElementById('layer').value);
+      for (let y = 0; y <= currentY; y++) {
+        if (!grid[y]) continue;
+        for (const key in grid[y]) {
+          const [x, z] = key.split(',').map(Number);
+          const model = grid[y][key];
+          const alpha = (y < currentY) ? 0.3 : 1;
+          drawModel(x, z, model, alpha);
+        }
+      }
     }
 
     function drawModel(x, z, model, alpha = 1.0) {
@@ -130,13 +130,14 @@
 
       ctx.globalAlpha = alpha;
 
-      const [type, angleStr] = model.split('$');
-      const angle = parseInt(angleStr);
+      const parts = model.split('$');
+      const type = parts[0];
+      const angle = parseInt(parts[1]) || 0;
 
       if (type === "Floor") {
         ctx.fillStyle = "#666";
         ctx.fillRect(x1 + 4, y1 + 4, cellSize - 8, cellSize - 8);
-      } else {
+      } else if (type === "Wall") {
         ctx.strokeStyle = "#00f";
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -148,87 +149,63 @@
           case 90:  ctx.moveTo(cx - half, cy - half); ctx.lineTo(cx + half, cy - half); break;
           case 180: ctx.moveTo(cx - half, cy - half); ctx.lineTo(cx - half, cy + half); break;
           case 270: ctx.moveTo(cx - half, cy + half); ctx.lineTo(cx + half, cy + half); break;
-          default:
-            ctx.fillStyle = "#00f";
-            ctx.fillRect(x1 + 8, y1 + 8, cellSize - 16, cellSize - 16);
         }
         ctx.stroke();
+      } else if (type.startsWith("Ramp")) {
+        ctx.fillStyle = "#0f0";
+        ctx.fillRect(x1 + 4, y1 + 4, cellSize - 8, cellSize - 8);
+        ctx.strokeStyle = "black";
+        ctx.beginPath();
+        const cx = x1 + cellSize / 2;
+        const cy = y1 + cellSize / 2;
+        const arrow = 10;
+        switch (angle) {
+          case 0:   ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - arrow); break;
+          case 90:  ctx.moveTo(cx, cy); ctx.lineTo(cx + arrow, cy); break;
+          case 180: ctx.moveTo(cx, cy); ctx.lineTo(cx, cy + arrow); break;
+          case 270: ctx.moveTo(cx, cy); ctx.lineTo(cx - arrow, cy); break;
+        }
+        ctx.stroke();
+      } else if (type === "Door" || type === "Window") {
+        ctx.fillStyle = type === "Door" ? "#c60" : "#09f";
+        ctx.fillRect(x1 + 4, y1 + 4, cellSize - 8, cellSize - 8);
+        ctx.clearRect(x1 + 14, y1 + 14, cellSize - 28, cellSize - 28);
+      } else {
+        ctx.fillStyle = "#999";
+        ctx.fillRect(x1 + 10, y1 + 10, cellSize - 20, cellSize - 20);
       }
 
       ctx.globalAlpha = 1.0;
     }
 
-    function drawGrid() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+function exportLua() {
+  const posX = parseInt(document.getElementById('posX').value);
+  const posY = parseInt(document.getElementById('posY').value);
+  const posZ = parseInt(document.getElementById('posZ').value);
+  let result = "local function Build(Model, x, y, z)\n";
+  result += "    local args = { Model, vector.create(x, y, z) }\n";
+  result += "    game:GetService(\"ReplicatedStorage\"):WaitForChild(\"BuildingSystem\"):WaitForChild(\"Libraries\"):WaitForChild(\"Grid\"):WaitForChild(\"AddGridObject\"):FireServer(unpack(args))\n";
+  result += "end\n\n";
 
-      for (let x = 0; x < cols; x++) {
-        for (let z = 0; z < rows; z++) {
-          ctx.strokeStyle = '#444';
-          ctx.strokeRect(x * cellSize, z * cellSize, cellSize, cellSize);
-        }
-      }
-
-      ctx.fillStyle = "#0f0";
-      ctx.fillRect((offsetX) * cellSize - 2, (offsetZ) * cellSize - 2, 4, 4);
-
-      const currentLayer = getLayer();
-
-      for (const key in grid) {
-        const [gx, gy, gz] = key.split(',').map(Number);
-        if (!showLowerCheckbox.checked && gy !== currentLayer) continue;
-        const alpha = gy === currentLayer ? 1.0 : 0.15;
-        for (const model of grid[key]) {
-          drawModel(gx, gz, model, alpha);
-        }
-      }
+  for (let y = 0; y < grid.length; y++) {
+    if (!grid[y]) continue;
+    for (const key in grid[y]) {
+      const [x, z] = key.split(',').map(Number);
+      const model = grid[y][key];
+      result += `Build("${model}", ${x + posX}, ${y + posY}, ${z + posZ})\n`;
     }
+  }
 
-    function exportLua() {
-      const [offX, offY, offZ] = getPosOffset();
-      let lua = 'local function Build(Model, x, y, z)\n';
-      lua += '    local args = {\n';
-      lua += '        Model,\n';
-      lua += `        vector.create(x + ${offX}, y + ${offY}, z + ${offZ})\n`;
-      lua += '    }\n';
-      lua += '    game:GetService("ReplicatedStorage"):WaitForChild("BuildingSystem"):WaitForChild("Libraries"):WaitForChild("Grid"):WaitForChild("AddGridObject"):FireServer(unpack(args))\n';
-      lua += 'end\n\n';
-      for (const key in grid) {
-        const [x, y, z] = key.split(',').map(Number);
-        for (const model of grid[key]) {
-          lua += `Build(\"${model}\", ${x}, ${y}, ${z})\n`;
-        }
-      }
-      const blob = new Blob([lua], {type: "text/plain"});
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "export.lua";
-      link.click();
-    }
+  const blob = new Blob([result], { type: "text/plain;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "export.lua";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
 
-    function clearCurrentLayer() {
-      const y = getLayer();
-      for (const key in grid) {
-        const [x, gy, z] = key.split(',').map(Number);
-        if (gy === y) {
-          delete grid[key];
-        }
-      }
-      drawGrid();
-    }
-
-    function resizeGrid() {
-      const width = parseInt(document.getElementById('gridWidth').value);
-      const height = parseInt(document.getElementById('gridHeight').value);
-      canvas.width = width * cellSize;
-      canvas.height = height * cellSize;
-      cols = width;
-      rows = height;
-      offsetX = Math.floor(cols / 2);
-      offsetZ = Math.floor(rows / 2);
-      drawGrid();
-    }
-
-    drawGrid();
+    resizeGrid();
   </script>
 </body>
 </html>
