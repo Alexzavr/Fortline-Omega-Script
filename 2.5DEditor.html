@@ -1,76 +1,4 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>2.5D Grid Editor</title>
-  <style>
-    body { margin: 0; background: #111; color: white; font-family: sans-serif; user-select: none; }
-    canvas { background: #222; display: block; margin: 0 auto; cursor: crosshair; }
-    #controls { padding: 10px; text-align: center; }
-    input, select, button { margin: 5px; }
-  </style>
-</head>
-<body>
-  <div id="controls">
-    Layer (Y): <input type="number" id="layer" min="0" max="99" value="0">
-    Model: <input type="text" id="model" value="Wall$0$0">
-    <button onclick="exportLua()">Export Lua</button>
-  </div>
-  <canvas id="canvas" width="800" height="800"></canvas>
-
-  <script>
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const cellSize = 40;
-    const cols = canvas.width / cellSize;
-    const rows = canvas.height / cellSize;
-
-    let isMouseDown = false;
-    let rightClick = false;
-
-    let grid = {}; // key = x,y,z ; value = model string
-
-    const getLayer = () => parseInt(document.getElementById('layer').value);
-    const getModel = () => document.getElementById('model').value;
-
-    canvas.addEventListener('mousedown', e => {
-      isMouseDown = true;
-      rightClick = e.button === 2;
-      handleClick(e);
-    });
-
-    canvas.addEventListener('mouseup', () => isMouseDown = false);
-    canvas.addEventListener('mouseleave', () => isMouseDown = false);
-    canvas.addEventListener('mousemove', e => {
-      if (isMouseDown) handleClick(e);
-    });
-
-    canvas.addEventListener('contextmenu', e => e.preventDefault());
-
-    function handleClick(e) {
-      const rect = canvas.getBoundingClientRect();
-      const x = Math.floor((e.clientX - rect.left) / cellSize);
-      const z = Math.floor((e.clientY - rect.top) / cellSize);
-      const y = getLayer();
-      const key = `${x},${y},${z}`;
-
-      if (rightClick) {
-        delete grid[key];
-      } else {
-        grid[key] = getModel();
-      }
-
-      drawGrid();
-    }
-
-    function drawGrid() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Draw base grid
-      for (let x = 0; x < cols; x++) {
-        for (let z = 0; z < rows; z++) {
-          ctx.strokeStyle = '#444';
-          ctx.strokeRect(x * cellSize, z * cellSize, cellSize, cellSize);
         }
       }
 
@@ -78,36 +6,38 @@
         const [gx, gy, gz] = key.split(',').map(Number);
         if (gy !== getLayer()) continue;
 
-        const model = grid[key];
+        const models = grid[key];
 
-        if (model && model.startsWith("Wall$")) {
-          const angle = parseInt(model.split('$')[1]);
-          ctx.strokeStyle = "#00f";
-          ctx.lineWidth = 2;
+        for (const model of models) {
+          if (model.startsWith("Wall$")) {
+            const angle = parseInt(model.split('$')[1]);
+            ctx.strokeStyle = "#00f";
+            ctx.lineWidth = 2;
 
-          const x1 = gx * cellSize;
-          const y1 = gz * cellSize;
-          const x2 = x1 + cellSize;
-          const y2 = y1 + cellSize;
+            const x1 = gx * cellSize;
+            const y1 = gz * cellSize;
+            const x2 = x1 + cellSize;
+            const y2 = y1 + cellSize;
 
-          ctx.beginPath();
-          if (angle === 0) {
-            ctx.moveTo(x2 - 1, y1 + 5);
-            ctx.lineTo(x2 - 1, y2 - 5);
-          } else if (angle === 90) {
-            ctx.moveTo(x1 + 5, y1 + 1);
-            ctx.lineTo(x2 - 5, y1 + 1);
-          } else if (angle === 180) {
-            ctx.moveTo(x1 + 1, y1 + 5);
-            ctx.lineTo(x1 + 1, y2 - 5);
-          } else if (angle === 270) {
-            ctx.moveTo(x1 + 5, y2 - 1);
-            ctx.lineTo(x2 - 5, y2 - 1);
-          } else {
-            ctx.fillStyle = "#00f";
-            ctx.fillRect(x1 + 8, y1 + 8, cellSize - 16, cellSize - 16);
+            ctx.beginPath();
+            if (angle === 0) {
+              ctx.moveTo(x2 - 1, y1 + 5);
+              ctx.lineTo(x2 - 1, y2 - 5);
+            } else if (angle === 90) {
+              ctx.moveTo(x1 + 5, y1 + 1);
+              ctx.lineTo(x2 - 5, y1 + 1);
+            } else if (angle === 180) {
+              ctx.moveTo(x1 + 1, y1 + 5);
+              ctx.lineTo(x1 + 1, y2 - 5);
+            } else if (angle === 270) {
+              ctx.moveTo(x1 + 5, y2 - 1);
+              ctx.lineTo(x2 - 5, y2 - 1);
+            } else {
+              ctx.fillStyle = "#00f";
+              ctx.fillRect(x1 + 8, y1 + 8, cellSize - 16, cellSize - 16);
+            }
+            ctx.stroke();
           }
-          ctx.stroke();
         }
       }
     }
@@ -116,7 +46,9 @@
       let lua = '';
       for (const key in grid) {
         const [x, y, z] = key.split(',').map(Number);
-        lua += `Build("${grid[key]}", ${x}, ${y}, ${z})\n`;
+        for (const model of grid[key]) {
+          lua += `Build("${model}", ${x}, ${y}, ${z})\n`;
+        }
       }
       const blob = new Blob([lua], {type: "text/plain"});
       const link = document.createElement("a");
@@ -129,3 +61,4 @@
   </script>
 </body>
 </html>
+
