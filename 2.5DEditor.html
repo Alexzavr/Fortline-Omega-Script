@@ -14,7 +14,17 @@
 <body>
   <div id="controls">
     Layer (Y): <input type="number" id="layer" min="0" max="99" value="0">
-    Model: <input type="text" id="model" value="Wall$0$0">
+    Model: 
+    <select id="model">
+      <option value="Wall$0$0">Wall</option>
+      <option value="Floor$0$0">Floor</option>
+      <option value="Ramp$0$0">Ramp</option>
+      <option value="Window$0$0">Window</option>
+      <option value="Door$0$0">Door</option>
+      <option value="RampLeft$0$0">RampLeft</option>
+      <option value="RampBack$0$0">RampBack</option>
+    </select>
+    <button onclick="rotateModel()">Rotate (R)</button>
     <label><input type="checkbox" id="showLower" /> Показати шари знизу</label>
     <button onclick="exportLua()">Export Lua</button>
     <button onclick="clearCurrentLayer()">Clear Current Layer</button>
@@ -34,17 +44,31 @@
     const cellSize = 40;
     let cols = canvas.width / cellSize;
     let rows = canvas.height / cellSize;
-    let offsetX = cols / 2;
-    let offsetZ = rows / 2;
+    let offsetX = Math.floor(cols / 2);
+    let offsetZ = Math.floor(rows / 2);
 
     let isMouseDown = false;
     let rightClick = false;
     let grid = {}; // key = x,y,z ; value = Set of model strings
 
     const getLayer = () => parseInt(document.getElementById('layer').value);
-    const getModel = () => document.getElementById('model').value;
     const showLowerCheckbox = document.getElementById('showLower');
     const coordDisplay = document.getElementById('coordDisplay');
+    let currentRotation = 0;
+
+    const getModel = () => {
+      const modelType = document.getElementById('model').value.split('$')[0];
+      return `${modelType}$${currentRotation}$0`;
+    };
+
+    function rotateModel() {
+      currentRotation = (currentRotation + 90) % 360;
+      drawGrid();
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key.toLowerCase() === 'r') rotateModel();
+    });
 
     const getPosOffset = () => [
       parseInt(document.getElementById('posX').value),
@@ -112,7 +136,7 @@
       if (type === "Floor") {
         ctx.fillStyle = "#666";
         ctx.fillRect(x1 + 4, y1 + 4, cellSize - 8, cellSize - 8);
-      } else if (type === "Wall") {
+      } else {
         ctx.strokeStyle = "#00f";
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -124,13 +148,9 @@
           case 90:  ctx.moveTo(cx - half, cy - half); ctx.lineTo(cx + half, cy - half); break;
           case 180: ctx.moveTo(cx - half, cy - half); ctx.lineTo(cx - half, cy + half); break;
           case 270: ctx.moveTo(cx - half, cy + half); ctx.lineTo(cx + half, cy + half); break;
-          case 45:  ctx.moveTo(cx + half, cy - half); ctx.lineTo(cx - half, cy + half); break;
-          case 135: ctx.moveTo(cx - half, cy - half); ctx.lineTo(cx + half, cy + half); break;
-          case 225: ctx.moveTo(cx - half, cy + half); ctx.lineTo(cx + half, cy - half); break;
-          case 315: ctx.moveTo(cx + half, cy + half); ctx.lineTo(cx - half, cy - half); break;
           default:
-            ctx.strokeStyle = "#0ff";
-            ctx.strokeRect(cx - 6, cy - 6, 12, 12);
+            ctx.fillStyle = "#00f";
+            ctx.fillRect(x1 + 8, y1 + 8, cellSize - 16, cellSize - 16);
         }
         ctx.stroke();
       }
@@ -153,37 +173,12 @@
 
       const currentLayer = getLayer();
 
-      if (showLowerCheckbox.checked) {
-        for (let y = 0; y <= currentLayer; y++) {
-          for (const key in grid) {
-            const [gx, gy, gz] = key.split(',').map(Number);
-            if (gy !== y) continue;
-            for (const model of grid[key]) {
-              if (model.startsWith("Floor$")) {
-                drawModel(gx, gz, model, y === currentLayer ? 1.0 : 0.15);
-              }
-            }
-          }
-        }
-      } else {
-        for (const key in grid) {
-          const [gx, gy, gz] = key.split(',').map(Number);
-          if (gy !== currentLayer) continue;
-          for (const model of grid[key]) {
-            if (model.startsWith("Floor$")) {
-              drawModel(gx, gz, model);
-            }
-          }
-        }
-      }
-
       for (const key in grid) {
         const [gx, gy, gz] = key.split(',').map(Number);
-        if (gy !== currentLayer) continue;
+        if (!showLowerCheckbox.checked && gy !== currentLayer) continue;
+        const alpha = gy === currentLayer ? 1.0 : 0.15;
         for (const model of grid[key]) {
-          if (!model.startsWith("Floor$")) {
-            drawModel(gx, gz, model);
-          }
+          drawModel(gx, gz, model, alpha);
         }
       }
     }
@@ -228,8 +223,8 @@
       canvas.height = height * cellSize;
       cols = width;
       rows = height;
-      offsetX = cols / 2;
-      offsetZ = rows / 2;
+      offsetX = Math.floor(cols / 2);
+      offsetZ = Math.floor(rows / 2);
       drawGrid();
     }
 
