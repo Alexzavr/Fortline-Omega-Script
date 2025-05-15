@@ -178,32 +178,26 @@
       ctx.globalAlpha = 1.0;
     }
 
-function exportLua() {
-  const posX = parseInt(document.getElementById('posX').value);
-  const posY = parseInt(document.getElementById('posY').value);
-  const posZ = parseInt(document.getElementById('posZ').value);
-  let result = "local function Build(Model, x, y, z)\n";
-  result += "    local args = { Model, vector.create(x, y, z) }\n";
-  result += "    game:GetService(\"ReplicatedStorage\"):WaitForChild(\"BuildingSystem\"):WaitForChild(\"Libraries\"):WaitForChild(\"Grid\"):WaitForChild(\"AddGridObject\"):FireServer(unpack(args))\n";
-  result += "end\n\n";
+    function exportLua() {
+      const posX = parseInt(document.getElementById('posX').value);
+      const posY = parseInt(document.getElementById('posY').value);
+      const posZ = parseInt(document.getElementById('posZ').value);
+      let result = "local function Build(Model, x, y, z)\n";
+      result += "    local args = { Model, vector.create(x, y, z) }\n";
+      result += "    game:GetService(\"ReplicatedStorage\"):WaitForChild(\"BuildingSystem\"):WaitForChild(\"Libraries\"):WaitForChild(\"Grid\"):WaitForChild(\"AddGridObject\"):FireServer(unpack(args))\n";
+      result += "end\n\n";
 
-  for (let y = 0; y < grid.length; y++) {
-    if (!grid[y]) continue;
-    for (const key in grid[y]) {
-      const [x, z] = key.split(',').map(Number);
-      const model = grid[y][key];
-      result += `Build("${model}", ${x + posX}, ${y + posY}, ${z + posZ})\n`;
+      for (let y = 0; y < grid.length; y++) {
+        if (!grid[y]) continue;
+        for (const key in grid[y]) {
+          const [x, z] = key.split(',').map(Number);
+          const model = grid[y][key];
+          result += `Build("${model}", ${x + posX}, ${y + posY}, ${z + posZ})\n`;
+        }
+      }
+      navigator.clipboard.writeText(result);
+      alert("Lua code copied to clipboard.");
     }
-  }
-
-  const blob = new Blob([result], { type: "text/plain;charset=utf-8" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "export.lua";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
 
     resizeGrid();
   </script>
