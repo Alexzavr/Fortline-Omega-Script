@@ -5,7 +5,7 @@
 ]]
 --[[
     Building Models:
-    Wall, Floor, Door, Window, Ramp
+    Wall, Floor, Door, Window, Ramp, RampBack
     All models can be rotated by $0$0
     Example: Wall$90$0, Floor$270$0, Ramp$180$0
 ]]
