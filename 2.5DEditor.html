@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>2.5D Grid Editor</title>
   <style>
     body { margin: 0; background: #111; color: white; font-family: sans-serif; user-select: none; }
@@ -12,9 +12,12 @@
 </head>
 <body>
   <div id="controls">
-    Layer (Y): <input type="number" id="layer" min="0" max="99" value="0">
-    Model: <input type="text" id="model" value="Wall$0$0">
+    Layer (Y): <input type="number" id="layer" min="0" max="99" value="0" />
+    Model: <input type="text" id="model" value="Wall$0$0" />
     <button onclick="exportLua()">Export Lua</button>
+    <br />
+    Фон: <input type="file" id="bgfile" accept="image/*" />
+    <label><input type="checkbox" id="showBg" checked /> Показати фон</label>
   </div>
   <canvas id="canvas" width="800" height="800"></canvas>
 
@@ -29,6 +32,8 @@
     let rightClick = false;
 
     let grid = {}; // key = x,y,z ; value = Set of model strings
+    let bgImage = null;
+    const showBgCheckbox = document.getElementById('showBg');
 
     const getLayer = () => parseInt(document.getElementById('layer').value);
     const getModel = () => document.getElementById('model').value;
@@ -68,9 +73,34 @@
       drawGrid();
     }
 
+    document.getElementById('bgfile').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        const img = new Image();
+        img.onload = () => {
+          bgImage = img;
+          drawGrid();
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    showBgCheckbox.addEventListener('change', () => {
+      drawGrid();
+    });
+
     function drawGrid() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Малюємо фон, якщо завантажений і чекбокс увімкнений
+      if (bgImage && showBgCheckbox.checked) {
+        ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+      }
+
+      // Малюємо сітку
       for (let x = 0; x < cols; x++) {
         for (let z = 0; z < rows; z++) {
           ctx.strokeStyle = '#444';
@@ -78,6 +108,7 @@
         }
       }
 
+      // Малюємо стіни
       for (const key in grid) {
         const [gx, gy, gz] = key.split(',').map(Number);
         if (gy !== getLayer()) continue;
