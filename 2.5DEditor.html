@@ -1,4 +1,80 @@
 <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>2.5D Grid Editor</title>
+  <style>
+    body { margin: 0; background: #111; color: white; font-family: sans-serif; user-select: none; }
+    canvas { background: #222; display: block; margin: 0 auto; cursor: crosshair; }
+    #controls { padding: 10px; text-align: center; }
+    input, select, button { margin: 5px; }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    Layer (Y): <input type="number" id="layer" min="0" max="99" value="0">
+    Model: <input type="text" id="model" value="Wall$0$0">
+    <button onclick="exportLua()">Export Lua</button>
+  </div>
+  <canvas id="canvas" width="800" height="800"></canvas>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const cellSize = 40;
+    const cols = canvas.width / cellSize;
+    const rows = canvas.height / cellSize;
+
+    let isMouseDown = false;
+    let rightClick = false;
+
+    let grid = {}; // key = x,y,z ; value = Set of model strings
+
+    const getLayer = () => parseInt(document.getElementById('layer').value);
+    const getModel = () => document.getElementById('model').value;
+
+    canvas.addEventListener('mousedown', e => {
+      isMouseDown = true;
+      rightClick = e.button === 2;
+      handleClick(e);
+    });
+
+    canvas.addEventListener('mouseup', () => isMouseDown = false);
+    canvas.addEventListener('mouseleave', () => isMouseDown = false);
+    canvas.addEventListener('mousemove', e => {
+      if (isMouseDown) handleClick(e);
+    });
+
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    function handleClick(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left) / cellSize);
+      const z = Math.floor((e.clientY - rect.top) / cellSize);
+      const y = getLayer();
+      const key = `${x},${y},${z}`;
+
+      if (!grid[key]) grid[key] = new Set();
+
+      const model = getModel();
+
+      if (rightClick) {
+        grid[key].delete(model);
+        if (grid[key].size === 0) delete grid[key];
+      } else {
+        grid[key].add(model);
+      }
+
+      drawGrid();
+    }
+
+    function drawGrid() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let x = 0; x < cols; x++) {
+        for (let z = 0; z < rows; z++) {
+          ctx.strokeStyle = '#444';
+          ctx.strokeRect(x * cellSize, z * cellSize, cellSize, cellSize);
         }
       }
 
@@ -61,4 +137,3 @@
   </script>
 </body>
 </html>
-
