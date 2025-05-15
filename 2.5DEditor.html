@@ -16,9 +16,13 @@
     Model: <input type="text" id="model" value="Wall$0$0">
     <label><input type="checkbox" id="showLower" /> Показати шари знизу</label>
     <button onclick="exportLua()">Export Lua</button>
-    <button onclick="saveJSON()">Save JSON</button>
-    <input type="file" id="loadInput" style="display: none;" />
-    <button onclick="document.getElementById('loadInput').click()">Load JSON</button>
+    <button onclick="clearCurrentLayer()">Clear Current Layer</button>
+    Width: <input type="number" id="gridWidth" value="20" min="1" max="100">
+    Height: <input type="number" id="gridHeight" value="20" min="1" max="100">
+    <button onclick="resizeGrid()">Resize Grid</button>
+    Pos X: <input type="number" id="posX" value="10">
+    Pos Y: <input type="number" id="posY" value="5">
+    Pos Z: <input type="number" id="posZ" value="0">
   </div>
   <canvas id="canvas" width="800" height="800"></canvas>
 
@@ -26,8 +30,8 @@
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const cellSize = 40;
-    const cols = canvas.width / cellSize;
-    const rows = canvas.height / cellSize;
+    let cols = canvas.width / cellSize;
+    let rows = canvas.height / cellSize;
 
     let isMouseDown = false;
     let rightClick = false;
@@ -36,6 +40,12 @@
     const getLayer = () => parseInt(document.getElementById('layer').value);
     const getModel = () => document.getElementById('model').value;
     const showLowerCheckbox = document.getElementById('showLower');
+
+    const getPosOffset = () => [
+      parseInt(document.getElementById('posX').value),
+      parseInt(document.getElementById('posY').value),
+      parseInt(document.getElementById('posZ').value),
+    ];
 
     canvas.addEventListener('mousedown', e => {
       isMouseDown = true;
@@ -155,17 +165,18 @@
     }
 
     function exportLua() {
+      const [offX, offY, offZ] = getPosOffset();
       let lua = 'local function Build(Model, x, y, z)\n';
       lua += '    local args = {\n';
       lua += '        Model,\n';
-      lua += '        vector.create(x, y, z)\n';
+      lua += `        vector.create(x + ${offX}, y + ${offY}, z + ${offZ})\n`;
       lua += '    }\n';
       lua += '    game:GetService("ReplicatedStorage"):WaitForChild("BuildingSystem"):WaitForChild("Libraries"):WaitForChild("Grid"):WaitForChild("AddGridObject"):FireServer(unpack(args))\n';
       lua += 'end\n\n';
       for (const key in grid) {
         const [x, y, z] = key.split(',').map(Number);
         for (const model of grid[key]) {
-          lua += `Build("${model}", ${x}, ${y}, ${z})\n`;
+          lua += `Build(\"${model}\", ${x}, ${y}, ${z})\n`;
         }
       }
       const blob = new Blob([lua], {type: "text/plain"});
@@ -175,39 +186,26 @@
       link.click();
     }
 
-    function saveJSON() {
-      const data = {
-        layer: getLayer(),
-        model: getModel(),
-        grid: Object.fromEntries(Object.entries(grid).map(([k, v]) => [k, Array.from(v)]))
-      };
-      const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "grid.json";
-      link.click();
+    function clearCurrentLayer() {
+      const y = getLayer();
+      for (const key in grid) {
+        const [x, gy, z] = key.split(',').map(Number);
+        if (gy === y) {
+          delete grid[key];
+        }
+      }
+      drawGrid();
     }
 
-    document.getElementById('loadInput').addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        try {
-          const data = JSON.parse(e.target.result);
-          document.getElementById('layer').value = data.layer || 0;
-          document.getElementById('model').value = data.model || "Wall$0$0";
-          grid = {};
-          for (const key in data.grid) {
-            grid[key] = new Set(data.grid[key]);
-          }
-          drawGrid();
-        } catch (err) {
-          alert("Invalid JSON file.");
-        }
-      };
-      reader.readAsText(file);
-    });
+    function resizeGrid() {
+      const width = parseInt(document.getElementById('gridWidth').value);
+      const height = parseInt(document.getElementById('gridHeight').value);
+      canvas.width = width * cellSize;
+      canvas.height = height * cellSize;
+      cols = width;
+      rows = height;
+      drawGrid();
+    }
 
     drawGrid();
   </script>
