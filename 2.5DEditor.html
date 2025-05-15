@@ -1,23 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>2.5D Grid Editor</title>
   <style>
     body { margin: 0; background: #111; color: white; font-family: sans-serif; user-select: none; }
     canvas { background: #222; display: block; margin: 0 auto; cursor: crosshair; }
     #controls { padding: 10px; text-align: center; }
-    input, select, button { margin: 5px; }
+    input, select, button, label { margin: 5px; }
   </style>
 </head>
 <body>
   <div id="controls">
-    Layer (Y): <input type="number" id="layer" min="0" max="99" value="0" />
-    Model: <input type="text" id="model" value="Wall$0$0" />
+    Layer (Y): <input type="number" id="layer" min="0" max="99" value="0">
+    Model: <input type="text" id="model" value="Wall$0$0">
+    <label><input type="checkbox" id="showLower" /> Показати шари знизу</label>
     <button onclick="exportLua()">Export Lua</button>
-    <br />
-    Фон: <input type="file" id="bgfile" accept="image/*" />
-    <label><input type="checkbox" id="showBg" checked /> Показати фон</label>
+    <button onclick="saveJSON()">Save JSON</button>
+    <input type="file" id="loadInput" style="display: none;" />
+    <button onclick="document.getElementById('loadInput').click()">Load JSON</button>
   </div>
   <canvas id="canvas" width="800" height="800"></canvas>
 
@@ -30,13 +31,11 @@
 
     let isMouseDown = false;
     let rightClick = false;
-
     let grid = {}; // key = x,y,z ; value = Set of model strings
-    let bgImage = null;
-    const showBgCheckbox = document.getElementById('showBg');
 
     const getLayer = () => parseInt(document.getElementById('layer').value);
     const getModel = () => document.getElementById('model').value;
+    const showLowerCheckbox = document.getElementById('showLower');
 
     canvas.addEventListener('mousedown', e => {
       isMouseDown = true;
@@ -58,9 +57,7 @@
       const z = Math.floor((e.clientY - rect.top) / cellSize);
       const y = getLayer();
       const key = `${x},${y},${z}`;
-
       if (!grid[key]) grid[key] = new Set();
-
       const model = getModel();
 
       if (rightClick) {
@@ -73,34 +70,46 @@
       drawGrid();
     }
 
-    document.getElementById('bgfile').addEventListener('change', e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(ev) {
-        const img = new Image();
-        img.onload = () => {
-          bgImage = img;
-          drawGrid();
-        };
-        img.src = ev.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
+    function drawModel(x, z, model, alpha = 1.0) {
+      const x1 = x * cellSize;
+      const y1 = z * cellSize;
+      const x2 = x1 + cellSize;
+      const y2 = y1 + cellSize;
 
-    showBgCheckbox.addEventListener('change', () => {
-      drawGrid();
-    });
+      ctx.globalAlpha = alpha;
+
+      const [type, angleStr] = model.split('$');
+      const angle = parseInt(angleStr);
+
+      if (type === "Floor") {
+        ctx.fillStyle = "#666";
+        ctx.fillRect(x1 + 4, y1 + 4, cellSize - 8, cellSize - 8);
+      } else if (type === "Wall") {
+        ctx.strokeStyle = "#00f";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        switch (angle) {
+          case 0:   ctx.moveTo(x2 - 1, y1 + 5); ctx.lineTo(x2 - 1, y2 - 5); break;
+          case 90:  ctx.moveTo(x1 + 5, y1 + 1); ctx.lineTo(x2 - 5, y1 + 1); break;
+          case 180: ctx.moveTo(x1 + 1, y1 + 5); ctx.lineTo(x1 + 1, y2 - 5); break;
+          case 270: ctx.moveTo(x1 + 5, y2 - 1); ctx.lineTo(x2 - 5, y2 - 1); break;
+          case 45:  ctx.moveTo(x2 - 5, y1 + 5); ctx.lineTo(x1 + 5, y2 - 5); break;
+          case 135: ctx.moveTo(x1 + 5, y1 + 5); ctx.lineTo(x2 - 5, y2 - 5); break;
+          case 225: ctx.moveTo(x1 + 5, y2 - 5); ctx.lineTo(x2 - 5, y1 + 5); break;
+          case 315: ctx.moveTo(x2 - 5, y2 - 5); ctx.lineTo(x1 + 5, y1 + 5); break;
+          default:
+            ctx.fillStyle = "#00f";
+            ctx.fillRect(x1 + 8, y1 + 8, cellSize - 16, cellSize - 16);
+        }
+        ctx.stroke();
+      }
+
+      ctx.globalAlpha = 1.0;
+    }
 
     function drawGrid() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Малюємо фон, якщо завантажений і чекбокс увімкнений
-      if (bgImage && showBgCheckbox.checked) {
-        ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
-      }
-
-      // Малюємо сітку
       for (let x = 0; x < cols; x++) {
         for (let z = 0; z < rows; z++) {
           ctx.strokeStyle = '#444';
@@ -108,49 +117,51 @@
         }
       }
 
-      // Малюємо стіни
+      const currentLayer = getLayer();
+
+      if (showLowerCheckbox.checked) {
+        for (let y = 0; y <= currentLayer; y++) {
+          for (const key in grid) {
+            const [gx, gy, gz] = key.split(',').map(Number);
+            if (gy !== y) continue;
+            for (const model of grid[key]) {
+              if (model.startsWith("Floor$")) {
+                drawModel(gx, gz, model, y === currentLayer ? 1.0 : 0.15);
+              }
+            }
+          }
+        }
+      } else {
+        for (const key in grid) {
+          const [gx, gy, gz] = key.split(',').map(Number);
+          if (gy !== currentLayer) continue;
+          for (const model of grid[key]) {
+            if (model.startsWith("Floor$")) {
+              drawModel(gx, gz, model);
+            }
+          }
+        }
+      }
+
       for (const key in grid) {
         const [gx, gy, gz] = key.split(',').map(Number);
-        if (gy !== getLayer()) continue;
-
-        const models = grid[key];
-
-        for (const model of models) {
-          if (model.startsWith("Wall$")) {
-            const angle = parseInt(model.split('$')[1]);
-            ctx.strokeStyle = "#00f";
-            ctx.lineWidth = 2;
-
-            const x1 = gx * cellSize;
-            const y1 = gz * cellSize;
-            const x2 = x1 + cellSize;
-            const y2 = y1 + cellSize;
-
-            ctx.beginPath();
-            if (angle === 0) {
-              ctx.moveTo(x2 - 1, y1 + 5);
-              ctx.lineTo(x2 - 1, y2 - 5);
-            } else if (angle === 90) {
-              ctx.moveTo(x1 + 5, y1 + 1);
-              ctx.lineTo(x2 - 5, y1 + 1);
-            } else if (angle === 180) {
-              ctx.moveTo(x1 + 1, y1 + 5);
-              ctx.lineTo(x1 + 1, y2 - 5);
-            } else if (angle === 270) {
-              ctx.moveTo(x1 + 5, y2 - 1);
-              ctx.lineTo(x2 - 5, y2 - 1);
-            } else {
-              ctx.fillStyle = "#00f";
-              ctx.fillRect(x1 + 8, y1 + 8, cellSize - 16, cellSize - 16);
-            }
-            ctx.stroke();
+        if (gy !== currentLayer) continue;
+        for (const model of grid[key]) {
+          if (!model.startsWith("Floor$")) {
+            drawModel(gx, gz, model);
           }
         }
       }
     }
 
     function exportLua() {
-      let lua = '';
+      let lua = 'local function Build(Model, x, y, z)\n';
+      lua += '    local args = {\n';
+      lua += '        Model,\n';
+      lua += '        vector.create(x, y, z)\n';
+      lua += '    }\n';
+      lua += '    game:GetService("ReplicatedStorage"):WaitForChild("BuildingSystem"):WaitForChild("Libraries"):WaitForChild("Grid"):WaitForChild("AddGridObject"):FireServer(unpack(args))\n';
+      lua += 'end\n\n';
       for (const key in grid) {
         const [x, y, z] = key.split(',').map(Number);
         for (const model of grid[key]) {
@@ -163,6 +174,40 @@
       link.download = "export.lua";
       link.click();
     }
+
+    function saveJSON() {
+      const data = {
+        layer: getLayer(),
+        model: getModel(),
+        grid: Object.fromEntries(Object.entries(grid).map(([k, v]) => [k, Array.from(v)]))
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "grid.json";
+      link.click();
+    }
+
+    document.getElementById('loadInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = JSON.parse(e.target.result);
+          document.getElementById('layer').value = data.layer || 0;
+          document.getElementById('model').value = data.model || "Wall$0$0";
+          grid = {};
+          for (const key in data.grid) {
+            grid[key] = new Set(data.grid[key]);
+          }
+          drawGrid();
+        } catch (err) {
+          alert("Invalid JSON file.");
+        }
+      };
+      reader.readAsText(file);
+    });
 
     drawGrid();
   </script>
