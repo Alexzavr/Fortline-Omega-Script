@@ -107,7 +107,7 @@ function applyCanvasSize() {
 document.getElementById("modelSelect").addEventListener("change", e => currentModel = e.target.value);
 
 document.addEventListener("keydown", e => {
-  if (e.key.toLowerCase() === 'e') {
+  if (e.key.toLowerCase() === 'q') {
     const parts = currentModel.split("$");
     let angle = (parseInt(parts[1]) + 90) % 360;
     currentModel = `${parts[0]}$${angle}$${parts[2]}`;
