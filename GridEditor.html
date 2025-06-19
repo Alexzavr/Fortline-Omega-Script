@@ -2,204 +2,242 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Grid Editor</title>
+  <title>2.5D Grid Editor</title>
   <style>
-    body { margin: 0; background: #111; color: white; font-family: sans-serif; user-select: none; }
-    canvas { background: #222; display: block; margin: 0 auto; cursor: crosshair; }
-    #controls { padding: 10px; text-align: center; }
-    input, select, button, label { margin: 5px; }
-    #coordDisplay { position: absolute; left: 10px; top: 10px; background: rgba(0,0,0,0.7); padding: 4px 8px; border-radius: 4px; font-size: 14px; }
+    body { margin: 0; overflow: hidden; background: #111; color: #eee; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    #ui {
+      position: absolute; top: 10px; left: 10px; z-index: 10;
+      background: rgba(0,0,0,0.7); padding: 10px; border-radius: 10px;
+    }
+    #canvasWrapper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    canvas { display: block; background: #222; border: 2px solid #555; }
+    button, select, input { margin: 2px; }
   </style>
 </head>
 <body>
-  <div id="controls">
-    Layer (Y): <input type="number" id="layer" min="0" max="99" value="0">
-    Model: 
-    <select id="model">
-      <option value="Wall$0$0">Wall</option>
+<div id="ui">
+  <label>Model:
+    <select id="modelSelect">
       <option value="Floor$0$0">Floor</option>
       <option value="Ramp$0$0">Ramp</option>
-      <option value="Window$0$0">Window</option>
-      <option value="Door$0$0">Door</option>
-      <option value="RampLeft$0$0">RampLeft</option>
       <option value="RampBack$0$0">RampBack</option>
+      <option value="RampLeft$0$0">RampLeft</option>
+      <option value="Wall$0$0">Wall</option>
+      <option value="Door$0$0">Door</option>
+      <option value="Window$0$0">Window</option>
     </select>
-    <label><input type="checkbox" id="showLower" /> Показати шари знизу</label>
-    <button onclick="exportLua()">Export Lua</button>
-    <button onclick="clearCurrentLayer()">Clear Current Layer</button>
-    Width: <input type="number" id="gridWidth" value="20" min="1" max="100">
-    Height: <input type="number" id="gridHeight" value="20" min="1" max="100">
-    <button onclick="resizeGrid()">Resize Grid</button>
-    Pos X: <input type="number" id="posX" value="10">
-    Pos Y: <input type="number" id="posY" value="5">
-    Pos Z: <input type="number" id="posZ" value="0">
-  </div>
-  <div id="coordDisplay"></div>
-  <canvas id="canvas" width="800" height="800"></canvas>
+  </label>
+  <label>Layer (Y): <input type="number" id="layer" value="0" style="width:50px;"></label>
+  <label>PosX: <input type="number" id="posX" value="0" style="width:50px;"></label>
+  <label>PosZ: <input type="number" id="posZ" value="0" style="width:50px;"></label>
+  <label>Width: <input type="number" id="gridWidth" value="25" style="width:50px;"></label>
+  <label>Height: <input type="number" id="gridHeight" value="20" style="width:50px;"></label>
+  <button onclick="applyCanvasSize()">Apply Size</button>
+  <button onclick="clearCurrentLayer()">Clear Layer</button>
+  <button onclick="exportLua()">Export Lua</button>
+</div>
+<div id="canvasWrapper">
+  <canvas id="canvas" width="1000" height="800"></canvas>
+</div>
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 
-  <script>
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    let gridWidth = 20;
-    let gridHeight = 20;
-    let cellSize = Math.floor(canvas.width / gridWidth);
-    let offsetX = Math.floor(gridWidth / 2);
-    let offsetZ = Math.floor(gridHeight / 2);
-    const grid = Array.from({ length: 100 }, () => []);
-    let currentModel = 'Wall$0$0';
-    let showLower = false;
+let gridWidth = 25, gridHeight = 20;
+let cellSize = 40;
+let offsetX = 0, offsetZ = 0;
 
-    function updateModelRotation(delta) {
-      const parts = currentModel.split('$');
-      let rot = parseInt(parts[1]);
-      rot = (rot + delta + 360) % 360;
-      currentModel = `${parts[0]}$${rot}$0`;
-      document.getElementById('model').value = currentModel;
+let grid = [];
+let currentModel = "Floor$0$0";
+let isPlacing = false;
+let isDeleting = false;
+
+const modelGroups = {
+  Floor: "Floor",
+  Ramp: "Ramp",
+  RampBack: "Ramp",
+  RampLeft: "Ramp",
+  Wall: "Wall",
+  Door: "Wall",
+  Window: "Wall",
+};
+
+const textureUrls = {
+  Wall: "https://i.postimg.cc/WbXxFjh1/Wall.png",
+  Floor: "https://i.postimg.cc/ryGBT5TW/Floor.png",
+  Ramp: "https://i.postimg.cc/659DpT6P/Ramp.png",
+  Door: "https://i.postimg.cc/13dTBH0x/Door.png",
+  Window: "https://i.postimg.cc/8zc9L36B/Window.png",
+  RampLeft: "https://i.postimg.cc/yNSGbZnD/RampLeft.png",
+  RampBack: "https://i.postimg.cc/LXKWK80N/RampBack.png",
+};
+
+const textures = {};
+for (const [name, url] of Object.entries(textureUrls)) {
+  const img = new Image();
+  img.src = url;
+  textures[name] = img;
+}
+
+function getGroup(model) {
+  const type = model.split('$')[0];
+  return modelGroups[type] || "Other";
+}
+
+function getAngle(model) {
+  return parseInt(model.split('$')[1]);
+}
+
+function updateOffsets() {
+  offsetX = parseInt(document.getElementById("posX").value);
+  offsetZ = parseInt(document.getElementById("posZ").value);
+}
+
+function applyCanvasSize() {
+  gridWidth = parseInt(document.getElementById("gridWidth").value);
+  gridHeight = parseInt(document.getElementById("gridHeight").value);
+  updateOffsets();
+  draw();
+}
+
+document.getElementById("modelSelect").addEventListener("change", e => currentModel = e.target.value);
+
+document.addEventListener("keydown", e => {
+  if (e.key.toLowerCase() === 'r') {
+    const parts = currentModel.split("$");
+    let angle = (parseInt(parts[1]) + 90) % 360;
+    currentModel = `${parts[0]}$${angle}$${parts[2]}`;
+    draw();
+  }
+});
+
+canvas.addEventListener("mousedown", e => {
+  if (e.button === 0) isPlacing = true;
+  if (e.button === 2) isDeleting = true;
+});
+
+canvas.addEventListener("mouseup", () => {
+  isPlacing = false;
+  isDeleting = false;
+});
+
+canvas.addEventListener("mousemove", e => {
+  if (isPlacing) handlePlace(e);
+  if (isDeleting) handleDelete(e);
+});
+
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+function handlePlace(e) {
+  updateOffsets();
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / cellSize - offsetX);
+  const z = Math.floor((e.clientY - rect.top) / cellSize - offsetZ);
+  const y = parseInt(document.getElementById("layer").value);
+  if (!grid[y]) grid[y] = [];
+  const key = `${x},${z}`;
+  const group = getGroup(currentModel);
+  const angle = getAngle(currentModel);
+  if (!Array.isArray(grid[y][key])) grid[y][key] = [];
+  const modelsAtCell = grid[y][key];
+  if (group === "Floor" || group === "Ramp") {
+    if (modelsAtCell.some(m => getGroup(m) === group)) return;
+  } else if (group === "Wall") {
+    const existingAngles = modelsAtCell.filter(m => getGroup(m) === "Wall").map(getAngle);
+    if (existingAngles.includes(angle)) return;
+    if (existingAngles.length >= 4) return;
+  } else {
+    if (modelsAtCell.length > 0) return;
+  }
+  if (!modelsAtCell.includes(currentModel)) {
+    modelsAtCell.push(currentModel);
+    draw();
+  }
+}
+
+function handleDelete(e) {
+  updateOffsets();
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / cellSize - offsetX);
+  const z = Math.floor((e.clientY - rect.top) / cellSize - offsetZ);
+  const y = parseInt(document.getElementById("layer").value);
+  if (!grid[y]) return;
+  const key = `${x},${z}`;
+  if (!grid[y][key]) return;
+  grid[y][key] = [];
+  draw();
+}
+
+function drawModel(x, z, model, alpha = 1) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const [type, angle] = model.split("$");
+  const img = textures[type];
+  const cx = (x + offsetX) * cellSize + cellSize / 2;
+  const cz = (z + offsetZ) * cellSize + cellSize / 2;
+  if (img.complete) {
+    ctx.translate(cx, cz);
+    ctx.rotate((parseInt(angle) || 0) * Math.PI / 180);
+    ctx.drawImage(img, -cellSize/2, -cellSize/2, cellSize, cellSize);
+    ctx.rotate(-(parseInt(angle) || 0) * Math.PI / 180);
+    ctx.translate(-cx, -cz);
+  }
+  ctx.restore();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let x = 0; x < gridWidth; x++) {
+    for (let z = 0; z < gridHeight; z++) {
+      ctx.strokeStyle = "#333";
+      ctx.strokeRect((x + offsetX) * cellSize, (z + offsetZ) * cellSize, cellSize, cellSize);
     }
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key.toLowerCase() === 'r') {
-        updateModelRotation(90);
+  }
+  const currentY = parseInt(document.getElementById("layer").value);
+  for (let y = 0; y <= currentY; y++) {
+    if (!grid[y]) continue;
+    for (const key in grid[y]) {
+      const [x, z] = key.split(",").map(Number);
+      const models = grid[y][key];
+      if (!Array.isArray(models)) continue;
+      for (const model of models) {
+        drawModel(x, z, model, y < currentY ? 0.3 : 1);
       }
-    });
-
-    document.getElementById('model').addEventListener('change', (e) => currentModel = e.target.value);
-    document.getElementById('layer').addEventListener('change', draw);
-    document.getElementById('showLower').addEventListener('change', () => { showLower = !showLower; draw(); });
-
-    canvas.addEventListener('mousemove', e => {
-      const rect = canvas.getBoundingClientRect();
-      const x = Math.floor((e.clientX - rect.left) / cellSize - offsetX);
-      const z = Math.floor((e.clientY - rect.top) / cellSize - offsetZ);
-      document.getElementById('coordDisplay').innerText = `(${x}, ${z})`;
-    });
-
-    canvas.addEventListener('click', e => {
-      const rect = canvas.getBoundingClientRect();
-      const x = Math.floor((e.clientX - rect.left) / cellSize - offsetX);
-      const z = Math.floor((e.clientY - rect.top) / cellSize - offsetZ);
-      const y = parseInt(document.getElementById('layer').value);
-      if (!grid[y]) grid[y] = [];
-      grid[y][`${x},${z}`] = currentModel;
-      draw();
-    });
-
-    function clearCurrentLayer() {
-      const y = parseInt(document.getElementById('layer').value);
-      grid[y] = [];
-      draw();
     }
+  }
+}
 
-    function resizeGrid() {
-      gridWidth = parseInt(document.getElementById('gridWidth').value);
-      gridHeight = parseInt(document.getElementById('gridHeight').value);
-      cellSize = Math.floor(canvas.width / gridWidth);
-      offsetX = Math.floor(gridWidth / 2);
-      offsetZ = Math.floor(gridHeight / 2);
-      draw();
-    }
-
-    function draw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      for (let x = 0; x < gridWidth; x++) {
-        for (let z = 0; z < gridHeight; z++) {
-          ctx.strokeStyle = '#555';
-          ctx.strokeRect((x * cellSize), (z * cellSize), cellSize, cellSize);
-        }
-      }
-
-      ctx.fillStyle = 'red';
-      ctx.fillRect(offsetX * cellSize + cellSize / 4, offsetZ * cellSize + cellSize / 4, cellSize / 2, cellSize / 2);
-
-      const currentY = parseInt(document.getElementById('layer').value);
-      for (let y = 0; y <= currentY; y++) {
-        if (!grid[y]) continue;
-        for (const key in grid[y]) {
-          const [x, z] = key.split(',').map(Number);
-          const model = grid[y][key];
-          const alpha = (y < currentY) ? 0.3 : 1;
-          drawModel(x, z, model, alpha);
-        }
+function exportLua() {
+  let result = "local function Build(Model, x, y, z)\n";
+  result += "    local args = { Model, vector.create(x, y, z) }\n";
+  result += "    game:GetService(\"ReplicatedStorage\"):WaitForChild(\"BuildingSystem\"):WaitForChild(\"Libraries\"):WaitForChild(\"Grid\"):WaitForChild(\"AddGridObject\"):FireServer(unpack(args))\n";
+  result += "end\n\n";
+  for (let y = 0; y < grid.length; y++) {
+    if (!grid[y]) continue;
+    for (const key in grid[y]) {
+      const [x, z] = key.split(",").map(Number);
+      const models = grid[y][key];
+      if (!Array.isArray(models)) continue;
+      for (const model of models) {
+        result += `Build(\"${model}\", ${x}, ${y}, ${z})\n`;
       }
     }
+  }
+  navigator.clipboard.writeText(result);
+  alert("Lua code copied to clipboard.");
+}
 
-    function drawModel(x, z, model, alpha = 1.0) {
-      const x1 = Math.floor((x + offsetX) * cellSize);
-      const y1 = Math.floor((z + offsetZ) * cellSize);
+function clearCurrentLayer() {
+  const y = parseInt(document.getElementById("layer").value);
+  grid[y] = [];
+  draw();
+}
 
-      ctx.globalAlpha = alpha;
-
-      const parts = model.split('$');
-      const type = parts[0];
-      const angle = parseInt(parts[1]) || 0;
-
-      if (type === "Floor") {
-        ctx.fillStyle = "#666";
-        ctx.fillRect(x1 + 4, y1 + 4, cellSize - 8, cellSize - 8);
-      } else if (type === "Wall") {
-        ctx.strokeStyle = "#00f";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        const cx = x1 + cellSize / 2;
-        const cy = y1 + cellSize / 2;
-        const half = cellSize / 2 - 5;
-        switch (angle) {
-          case 0:   ctx.moveTo(cx + half, cy - half); ctx.lineTo(cx + half, cy + half); break;
-          case 90:  ctx.moveTo(cx - half, cy - half); ctx.lineTo(cx + half, cy - half); break;
-          case 180: ctx.moveTo(cx - half, cy - half); ctx.lineTo(cx - half, cy + half); break;
-          case 270: ctx.moveTo(cx - half, cy + half); ctx.lineTo(cx + half, cy + half); break;
-        }
-        ctx.stroke();
-      } else if (type.startsWith("Ramp")) {
-        ctx.fillStyle = "#0f0";
-        ctx.fillRect(x1 + 4, y1 + 4, cellSize - 8, cellSize - 8);
-        ctx.strokeStyle = "black";
-        ctx.beginPath();
-        const cx = x1 + cellSize / 2;
-        const cy = y1 + cellSize / 2;
-        const arrow = 10;
-        switch (angle) {
-          case 0:   ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - arrow); break;
-          case 90:  ctx.moveTo(cx, cy); ctx.lineTo(cx + arrow, cy); break;
-          case 180: ctx.moveTo(cx, cy); ctx.lineTo(cx, cy + arrow); break;
-          case 270: ctx.moveTo(cx, cy); ctx.lineTo(cx - arrow, cy); break;
-        }
-        ctx.stroke();
-      } else if (type === "Door" || type === "Window") {
-        ctx.fillStyle = type === "Door" ? "#c60" : "#09f";
-        ctx.fillRect(x1 + 4, y1 + 4, cellSize - 8, cellSize - 8);
-        ctx.clearRect(x1 + 14, y1 + 14, cellSize - 28, cellSize - 28);
-      } else {
-        ctx.fillStyle = "#999";
-        ctx.fillRect(x1 + 10, y1 + 10, cellSize - 20, cellSize - 20);
-      }
-
-      ctx.globalAlpha = 1.0;
-    }
-
-    function exportLua() {
-      const posX = parseInt(document.getElementById('posX').value);
-      const posY = parseInt(document.getElementById('posY').value);
-      const posZ = parseInt(document.getElementById('posZ').value);
-      let result = "local function Build(Model, x, y, z)\n";
-      result += "    local args = { Model, vector.create(x, y, z) }\n";
-      result += "    game:GetService(\"ReplicatedStorage\"):WaitForChild(\"BuildingSystem\"):WaitForChild(\"Libraries\"):WaitForChild(\"Grid\"):WaitForChild(\"AddGridObject\"):FireServer(unpack(args))\n";
-      result += "end\n\n";
-
-      for (let y = 0; y < grid.length; y++) {
-        if (!grid[y]) continue;
-        for (const key in grid[y]) {
-          const [x, z] = key.split(',').map(Number);
-          const model = grid[y][key];
-          result += `Build("${model}", ${x + posX}, ${y + posY}, ${z + posZ})\n`;
-        }
-      }
-      navigator.clipboard.writeText(result);
-      alert("Lua code copied to clipboard.");
-    }
-
-    resizeGrid();
-  </script>
+draw();
+</script>
 </body>
 </html>
