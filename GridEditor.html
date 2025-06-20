@@ -100,7 +100,8 @@ function updateOffsets() {
 function applyCanvasSize() {
   const newWidth = parseInt(document.getElementById("gridWidth").value);
   const newHeight = parseInt(document.getElementById("gridHeight").value);
-  updateOffsets();
+  offsetX = parseInt(document.getElementById("posX").value);
+  offsetZ = parseInt(document.getElementById("posZ").value);
 
   const newGrid = [];
   for (let y = 0; y < grid.length; y++) {
@@ -120,6 +121,7 @@ function applyCanvasSize() {
 
   draw();
 }
+
 
 document.getElementById("modelSelect").addEventListener("change", e => currentModel = e.target.value);
 
@@ -229,7 +231,9 @@ function draw() {
 }
 
 function exportLua() {
-  updateOffsets();
+  const posX = parseInt(document.getElementById("posX").value);
+  const posZ = parseInt(document.getElementById("posZ").value);
+
   let result = "local function Build(Model, x, y, z)\n";
   result += "    local args = { Model, vector.create(x, y, z) }\n";
   result += "    game:GetService(\"ReplicatedStorage\"):WaitForChild(\"BuildingSystem\"):WaitForChild(\"Libraries\"):WaitForChild(\"Grid\"):WaitForChild(\"AddGridObject\"):FireServer(unpack(args))\n";
@@ -242,7 +246,7 @@ function exportLua() {
       const models = grid[y][key];
       if (!Array.isArray(models)) continue;
       for (const model of models) {
-        result += `Build("${model}", ${x + offsetX}, ${y}, ${z + offsetZ})\n`;
+        result += `Build("${model}", ${x + posX}, ${y}, ${z + posZ})\n`;
       }
     }
   }
