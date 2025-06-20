@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Grid Editor v.0.1</title>
+  <title>Grid Editor v.0.2</title>
   <style>
     body { margin: 0; overflow: hidden; background: #111; color: #eee; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
     #ui {
@@ -93,8 +93,8 @@ function getAngle(model) {
 }
 
 function updateOffsets() {
-  offsetX = parseInt(document.getElementById("posX").value);
-  offsetZ = parseInt(document.getElementById("posZ").value);
+  offsetX = parseInt(document.getElementById("offsetX").value);
+  offsetZ = parseInt(document.getElementById("offsetZ").value);
 }
 
 function applyCanvasSize() {
