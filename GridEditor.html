@@ -98,9 +98,26 @@ function updateOffsets() {
 }
 
 function applyCanvasSize() {
-  gridWidth = parseInt(document.getElementById("gridWidth").value);
-  gridHeight = parseInt(document.getElementById("gridHeight").value);
+  const newWidth = parseInt(document.getElementById("gridWidth").value);
+  const newHeight = parseInt(document.getElementById("gridHeight").value);
   updateOffsets();
+
+  const newGrid = [];
+  for (let y = 0; y < grid.length; y++) {
+    if (!grid[y]) continue;
+    newGrid[y] = [];
+    for (const key in grid[y]) {
+      const [x, z] = key.split(',').map(Number);
+      if (x >= 0 && x < newWidth && z >= 0 && z < newHeight) {
+        newGrid[y][key] = grid[y][key];
+      }
+    }
+  }
+
+  grid = newGrid;
+  gridWidth = newWidth;
+  gridHeight = newHeight;
+
   draw();
 }
 
@@ -212,10 +229,12 @@ function draw() {
 }
 
 function exportLua() {
+  updateOffsets();
   let result = "local function Build(Model, x, y, z)\n";
   result += "    local args = { Model, vector.create(x, y, z) }\n";
   result += "    game:GetService(\"ReplicatedStorage\"):WaitForChild(\"BuildingSystem\"):WaitForChild(\"Libraries\"):WaitForChild(\"Grid\"):WaitForChild(\"AddGridObject\"):FireServer(unpack(args))\n";
   result += "end\n\n";
+
   for (let y = 0; y < grid.length; y++) {
     if (!grid[y]) continue;
     for (const key in grid[y]) {
@@ -223,10 +242,11 @@ function exportLua() {
       const models = grid[y][key];
       if (!Array.isArray(models)) continue;
       for (const model of models) {
-        result += `Build(\"${model}\", ${x}, ${y}, ${z})\n`;
+        result += `Build("${model}", ${x + offsetX}, ${y}, ${z + offsetZ})\n`;
       }
     }
   }
+
   navigator.clipboard.writeText(result);
   alert("Lua code copied to clipboard.");
 }
