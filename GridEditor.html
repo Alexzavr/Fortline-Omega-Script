@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Grid Editor</title>
+  <title>Grid Editor v.0.1</title>
   <style>
     body { margin: 0; overflow: hidden; background: #111; color: #eee; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
     #ui {
@@ -100,8 +100,7 @@ function updateOffsets() {
 function applyCanvasSize() {
   const newWidth = parseInt(document.getElementById("gridWidth").value);
   const newHeight = parseInt(document.getElementById("gridHeight").value);
-  offsetX = parseInt(document.getElementById("posX").value);
-  offsetZ = parseInt(document.getElementById("posZ").value);
+  updateOffsets(); // оновлює offsetX/offsetZ для рендера
 
   const newGrid = [];
   for (let y = 0; y < grid.length; y++) {
