@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Grid Editor v1</title>
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      color: #eee;
+      font-family: sans-serif;
+      height: 100vh;
+      overflow: auto;
+    }
+    #ui {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background: rgba(0,0,0,0.7);
+      padding: 10px;
+      border-radius: 10px;
+    }
+    #canvasWrapper {
+      margin-top: 80px;
+      margin-left: 10px;
+      display: flex;
+      justify-content: start;
+      align-items: start;
+    }
+    canvas {
+      background: #222;
+      border: 2px solid #555;
+      cursor: grab;
+    }
+    button, select, input {
+      margin: 2px;
+    }
+  </style>
+</head>
+<body>
+<div id="ui">
+  <label>Model:
+    <select id="modelSelect">
+      <option value="Floor$0$0">Floor</option>
+      <option value="Ramp$0$0">Ramp</option>
+      <option value="RampBack$0$0">RampBack</option>
+      <option value="RampLeft$0$0">RampLeft</option>
+      <option value="Wall$0$0">Wall</option>
+      <option value="Door$0$0">Door</option>
+      <option value="Window$0$0">Window</option>
+    </select>
+  </label>
+  <label>Layer (Y): <input type="number" id="layer" value="0" style="width:50px;"></label>
+  <label>PosX: <input type="number" id="posX" value="0" style="width:50px;"></label>
+  <label>PosZ: <input type="number" id="posZ" value="0" style="width:50px;"></label>
+  <label>Width: <input type="number" id="gridWidth" value="25" style="width:50px;"></label>
+  <label>Height: <input type="number" id="gridHeight" value="20" style="width:50px;"></label>
+  <button onclick="applyCanvasSize()">Apply Size</button>
+  <button onclick="clearCurrentLayer()">Clear Layer</button>
+  <button onclick="exportLua()">Export Lua</button>
+
+  <!-- ✅ Доданий текст про обертання -->
+  <div style="margin-top: 8px; font-size: 13px; color: #ccc;">
+    🔄 Rotate on <b>Q</b>
+  </div>
+</div>
+<div id="canvasWrapper">
+  <canvas id="canvas"></canvas>
+</div>
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+let gridWidth = 25, gridHeight = 20;
+let cellSize = 40;
+let offsetX = 0, offsetZ = 0;
+
+let grid = [];
+let currentModel = "Floor$0$0";
+let isPlacing = false;
+let isDeleting = false;
+
+const modelGroups = {
+  Floor: "Floor",
+  Ramp: "Ramp",
+  RampBack: "Ramp",
+  RampLeft: "Ramp",
+  Wall: "Wall",
+  Door: "Wall",
+  Window: "Wall",
+};
+
+const textureUrls = {
+  Wall: "https://i.postimg.cc/WbXxFjh1/Wall.png",
+  Floor: "https://i.postimg.cc/ryGBT5TW/Floor.png",
+  Ramp: "https://i.postimg.cc/659DpT6P/Ramp.png",
+  Door: "https://i.postimg.cc/13dTBH0x/Door.png",
+  Window: "https://i.postimg.cc/8zc9L36B/Window.png",
+  RampLeft: "https://i.postimg.cc/yNSGbZnD/RampLeft.png",
+  RampBack: "https://i.postimg.cc/LXKWK80N/RampBack.png",
+};
+
+const textures = {};
+for (const [name, url] of Object.entries(textureUrls)) {
+  const img = new Image();
+  img.src = url;
+  textures[name] = img;
+}
+
+function getGroup(model) {
+  const type = model.split('$')[0];
+  return modelGroups[type] || "Other";
+}
+function getAngle(model) {
+  return parseInt(model.split('$')[1]);
+}
+function updateOffsets() {
+  offsetX = 0;
+  offsetZ = 0;
+}
+
+function applyCanvasSize() {
+  gridWidth = parseInt(document.getElementById("gridWidth").value);
+  gridHeight = parseInt(document.getElementById("gridHeight").value);
+  updateOffsets();
+
+  const width = (gridWidth + Math.abs(offsetX)) * cellSize;
+  const height = (gridHeight + Math.abs(offsetZ)) * cellSize;
+  canvas.width = width;
+  canvas.height = height;
+
+  const newGrid = [];
+  for (let y = 0; y < grid.length; y++) {
+    if (!grid[y]) continue;
+    newGrid[y] = [];
+    for (const key in grid[y]) {
+      const [x, z] = key.split(',').map(Number);
+      if (x >= 0 && x < gridWidth && z >= 0 && z < gridHeight) {
+        newGrid[y][key] = grid[y][key];
+      }
+    }
+  }
+  grid = newGrid;
+  draw();
+}
+
+document.getElementById("modelSelect").addEventListener("change", e => currentModel = e.target.value);
+document.addEventListener("keydown", e => {
+  if (e.key.toLowerCase() === 'q') {
+    const parts = currentModel.split("$");
+    let angle = (parseInt(parts[1]) + 90) % 360;
+    currentModel = `${parts[0]}$${angle}$${parts[2]}`;
+    draw();
+  }
+});
+
+canvas.addEventListener("mousedown", e => {
+  if (e.button === 0) isPlacing = true;
+  if (e.button === 2) isDeleting = true;
+});
+canvas.addEventListener("mouseup", () => {
+  isPlacing = false;
+  isDeleting = false;
+});
+canvas.addEventListener("mousemove", e => {
+  if (isPlacing) handlePlace(e);
+  if (isDeleting) handleDelete(e);
+});
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+function getCanvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / cellSize - offsetX);
+  const z = Math.floor((e.clientY - rect.top) / cellSize - offsetZ);
+  return [x, z];
+}
+
+function handlePlace(e) {
+  const [x, z] = getCanvasCoords(e);
+  const y = parseInt(document.getElementById("layer").value);
+  if (!grid[y]) grid[y] = [];
+  const key = `${x},${z}`;
+  const group = getGroup(currentModel);
+  const angle = getAngle(currentModel);
+  if (!Array.isArray(grid[y][key])) grid[y][key] = [];
+  const modelsAtCell = grid[y][key];
+  if (group === "Floor" || group === "Ramp") {
+    if (modelsAtCell.some(m => getGroup(m) === group)) return;
+  } else if (group === "Wall") {
+    const existingAngles = modelsAtCell.filter(m => getGroup(m) === "Wall").map(getAngle);
+    if (existingAngles.includes(angle)) return;
+    if (existingAngles.length >= 4) return;
+  } else {
+    if (modelsAtCell.length > 0) return;
+  }
+  if (!modelsAtCell.includes(currentModel)) {
+    modelsAtCell.push(currentModel);
+    draw();
+  }
+}
+
+function handleDelete(e) {
+  const [x, z] = getCanvasCoords(e);
+  const y = parseInt(document.getElementById("layer").value);
+  if (!grid[y]) return;
+  const key = `${x},${z}`;
+  if (!grid[y][key]) return;
+  grid[y][key] = [];
+  draw();
+}
+
+function drawModel(x, z, model, alpha = 1) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const [type, angle] = model.split("$");
+  const img = textures[type];
+  const cx = (x + offsetX) * cellSize + cellSize / 2;
+  const cz = (z + offsetZ) * cellSize + cellSize / 2;
+  if (img.complete) {
+    ctx.translate(cx, cz);
+    ctx.rotate((parseInt(angle) || 0) * Math.PI / 180);
+    ctx.drawImage(img, -cellSize / 2, -cellSize / 2, cellSize, cellSize);
+    ctx.rotate(-(parseInt(angle) || 0) * Math.PI / 180);
+    ctx.translate(-cx, -cz);
+  }
+  ctx.restore();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let x = 0; x < gridWidth; x++) {
+    for (let z = 0; z < gridHeight; z++) {
+      ctx.strokeStyle = "#333";
+      ctx.strokeRect((x + offsetX) * cellSize, (z + offsetZ) * cellSize, cellSize, cellSize);
+    }
+  }
+  const currentY = parseInt(document.getElementById("layer").value);
+  for (let y = 0; y <= currentY; y++) {
+    if (!grid[y]) continue;
+    for (const key in grid[y]) {
+      const [x, z] = key.split(",").map(Number);
+      const models = grid[y][key];
+      if (!Array.isArray(models)) continue;
+      for (const model of models) {
+        drawModel(x, z, model, y < currentY ? 0.3 : 1);
+      }
+    }
+  }
+}
+
+function exportLua() {
+  const posX = parseInt(document.getElementById("posX").value);
+  const posZ = parseInt(document.getElementById("posZ").value);
+  let result = "local function Build(Model, x, y, z)\n";
+  result += "    local args = { Model, vector.create(x, y, z) }\n";
+  result += "    game:GetService(\"ReplicatedStorage\"):WaitForChild(\"BuildingSystem\"):WaitForChild(\"Libraries\"):WaitForChild(\"Grid\"):WaitForChild(\"AddGridObject\"):FireServer(unpack(args))\n";
+  result += "end\n\n";
+  for (let y = 0; y < grid.length; y++) {
+    if (!grid[y]) continue;
+    for (const key in grid[y]) {
+      const [x, z] = key.split(",").map(Number);
+      const models = grid[y][key];
+      if (!Array.isArray(models)) continue;
+      for (const model of models) {
+        result += `Build("${model}", ${x + posX}, ${y}, ${z + posZ})\n`;
+      }
+    }
+  }
+  navigator.clipboard.writeText(result);
+  alert("Lua code copied to clipboard.");
+}
+
+function clearCurrentLayer() {
+  const y = parseInt(document.getElementById("layer").value);
+  grid[y] = [];
+  draw();
+}
+
+applyCanvasSize();
+</script>
+</body>
+</html>
