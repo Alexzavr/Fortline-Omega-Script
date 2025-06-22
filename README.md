@@ -1,6 +1,6 @@
 🧱 Grid Editor
 
-Grid Editor is a simple HTML/JavaScript-based level editor designed for creating top-down grid-based maps with multiple layers. It supports exporting the level as Lua code for use in Roblox Forline game or other grid-based systems.
+Grid Editor is a simple HTML/JavaScript-based level editor designed for creating top-down grid-based maps with multiple layers. It supports exporting the level as Lua code for use in Roblox Forline games.
 
 
 🧩 Features
